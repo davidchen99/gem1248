@@ -1,0 +1,157 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#f8f5fb">
+  <meta name="description" content="GEM1248：滑动合成邓紫棋 I AM GLORIA 巡演 Q 版造型。从 1 到 2048，把小小的相遇变成闪耀的舞台。手机、平板和电脑打开即玩。">
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="GEM1248 · I AM GLORIA">
+  <meta property="og:description" content="滑动合成邓紫棋巡演 Q 版造型，点亮你的 2048 荣耀时刻。手机、平板、电脑打开即玩。">
+  <meta property="og:image" content="https://davidchen99.github.io/gem1248/assets/01-encore.webp">
+  <title>GEM1248 · 合成小紫棋</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='18' fill='%238769b0'/%3E%3Cpath d='m32 9 5 17 18 6-18 5-5 18-6-18-17-5 17-6Z' fill='%23fff5d6'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="style.css?v=d145cd8fccd9">
+  <script defer src="engine.js"></script>
+  <script defer src="app.js?v=5d975a8a27f2"></script>
+</head>
+<body>
+  <div class="ambient ambient-one" aria-hidden="true"></div>
+  <div class="ambient ambient-two" aria-hidden="true"></div>
+  <header class="site-header">
+    <a href="./" class="brand" aria-label="GEM1248 首页">
+      <span class="brand-mark" aria-hidden="true">✦</span>
+      <span class="brand-text">GEM<span class="brand-number">1248</span><small>I AM GLORIA</small></span>
+    </a>
+    <div class="header-tag"><span class="live-dot" aria-hidden="true"></span>A LITTLE GAME, A LITTLE GLORY</div>
+    <nav class="header-actions" aria-label="游戏设置">
+      <button id="sound-btn" class="icon-button" type="button" aria-label="开启音效" aria-pressed="false" title="音效开关">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="M11 5 6 9H3v6h3l5 4V5Z"/><path id="sound-path" d="m16 9 5 6m0-6-5 6"/></svg>
+      </button>
+      <button id="help-btn" class="icon-button" type="button" aria-label="玩法说明" title="玩法说明">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M9.5 9a2.5 2.5 0 1 1 4.3 1.7c-1.5.8-1.8 1.4-1.8 2.8"/><path d="M12 17h.01" stroke-width="2.5"/></svg>
+      </button>
+    </nav>
+  </header>
+
+  <main class="game-layout">
+    <aside class="intro-column">
+      <div class="intro-heading">
+        <span class="eyebrow intro-eyebrow">THE LITTLE GLORIA TOUR</span>
+        <h1>合成<span>小紫棋<i aria-hidden="true">✦</i></span></h1>
+        <p class="intro-copy">让每一次相遇，<br>都变成闪闪发光的你。</p>
+      </div>
+      <section class="score-card" aria-label="游戏分数">
+        <div class="score-main"><span class="score-label">本场得分 <i aria-hidden="true">✧</i></span><strong id="score">0</strong></div>
+        <div class="score-best"><span>最高纪录</span><strong id="best">0</strong></div>
+      </section>
+      <section class="current-card" aria-label="当前解锁的最高造型">
+        <div class="current-art"><div class="art-orbit" aria-hidden="true"></div><img id="current-look" src="assets/01-encore.webp" alt="紫色安可 Q 版造型" draggable="false"><span class="art-spark spark-one" aria-hidden="true">✦</span><span class="art-spark spark-two" aria-hidden="true">✧</span></div>
+        <span class="eyebrow">YOUR GLORIA MOMENT</span>
+        <h2 id="current-look-name">紫色安可</h2>
+        <p>每一次合成，都离荣耀更近一点</p>
+      </section>
+      <div class="little-note"><span aria-hidden="true">✧</span> 小小的你，也有大大的光。</div>
+    </aside>
+
+    <section class="play-column" aria-label="GEM1248 游戏">
+      <div class="game-toolbar">
+        <div class="stage-caption"><span class="stage-dot" aria-hidden="true"></span><span>你的荣耀舞台</span><small>4 × 4</small></div>
+        <div class="game-actions">
+          <button id="undo-btn" class="action-button" type="button" aria-label="撤销上一步" title="撤销上一步" disabled>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="m9 5-5 5 5 5M4 10h10a6 6 0 0 1 0 12" transform="translate(0 -3)"/></svg><span>撤销</span>
+          </button>
+          <button id="new-game-btn" class="action-button new-game" type="button" aria-label="开始新游戏">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="M4 10a8 8 0 1 1 1.2 7M4 4v6h6"/></svg><span>新一场</span>
+          </button>
+        </div>
+      </div>
+      <div id="board" class="board" tabindex="0" role="application" aria-label="GEM1248 棋盘。手机上下左右滑动，电脑使用方向键或 WASD。相同数字合并，目标 2048。">
+        <div class="board-grid" aria-hidden="true">
+          <div></div><div></div><div></div><div></div>
+          <div></div><div></div><div></div><div></div>
+          <div></div><div></div><div></div><div></div>
+          <div></div><div></div><div></div><div></div>
+        </div>
+        <div id="tile-layer" class="tile-layer"></div>
+        <div id="overlay" class="game-overlay" hidden>
+          <div class="overlay-star" aria-hidden="true">✦</div>
+          <span class="eyebrow">A LITTLE GLORIA MOMENT</span>
+          <h2 id="overlay-title">荣耀时刻</h2>
+          <p id="overlay-copy">小紫棋们闪耀全场。</p>
+          <div class="overlay-score"><span>本场得分</span><strong id="overlay-score">0</strong></div>
+          <button id="overlay-primary" class="primary-button" type="button">再开一场</button>
+          <button id="overlay-secondary" class="text-button" type="button">看看舞台</button>
+        </div>
+      </div>
+      <div class="play-hint"><span class="hint-arrows" aria-hidden="true">↕ ↔</span><span>滑动棋盘，相同数字即可合成</span><span class="desktop-hint">方向键 / WASD</span></div>
+      <div class="progress-card">
+        <div class="progress-top"><span><i aria-hidden="true">✦</i> 向 2048 闪耀</span><strong><span id="highest">1</span><span class="progress-goal"> / 2048</span></strong></div>
+        <div class="progress-track" role="presentation"><div id="progress-fill"></div></div>
+        <div class="progress-bottom"><span>1 → 2 → 4 → 8 → …</span><span>已滑动 <strong id="moves">0</strong> 次</span></div>
+      </div>
+      <div class="merge-demo" aria-label="合成示例：1 加 1 合成 2">
+        <div class="demo-tile"><img src="assets/01-encore.webp" alt="" draggable="false"><b>1</b></div><span class="demo-symbol">+</span><div class="demo-tile"><img src="assets/01-encore.webp" alt="" draggable="false"><b>1</b></div><span class="demo-symbol">=</span><div class="demo-tile result"><img src="assets/02-jersey.webp" alt="" draggable="false"><b>2</b></div>
+        <p>相遇，合成，<br><strong>解锁下一套造型。</strong></p>
+      </div>
+    </section>
+
+    <aside class="collection-column" aria-label="巡演造型图鉴">
+      <div class="collection-heading"><div><span class="eyebrow">THE LOOKBOOK</span><h2>每一面，都闪耀</h2></div><span class="collection-star" aria-hidden="true">✧</span></div>
+      <p class="collection-copy">把巡演里的小紫棋，一套套合出来。</p>
+      <div id="lookbook" class="lookbook"></div>
+      <button id="collection-btn" class="collection-button" type="button">查看全部造型<span aria-hidden="true">↗</span></button>
+      <div class="collection-note"><span aria-hidden="true">✦</span><p>8 套巡演造型<br><strong>还有 4 个特别荣耀时刻</strong></p></div>
+    </aside>
+  </main>
+
+  <footer class="site-footer"><span>MADE OF LITTLE MOMENTS & BIG LOVE</span><span>G.E.M. I AM GLORIA · 非官方粉丝同人小游戏</span></footer>
+  <div id="toast" class="toast" role="status"></div>
+  <div id="announcer" class="visually-hidden" aria-live="polite" aria-atomic="true"></div>
+
+  <dialog id="help-dialog" class="dialog help-dialog" aria-labelledby="help-title">
+    <button class="dialog-close icon-button" type="button" data-close aria-label="关闭玩法说明">×</button>
+    <span class="eyebrow">HOW TO PLAY</span><h2 id="help-title">相遇，就会发光 <span aria-hidden="true">✧</span></h2>
+    <p class="dialog-lead">熟悉的数字合成玩法，装满可爱的小紫棋。</p>
+    <div class="help-steps">
+      <div><span class="step-number">01</span><section><h3>向一个方向滑动</h3><p>手机上下左右滑动棋盘；电脑使用方向键或 WASD。所有方块一起移动。</p></section></div>
+      <div><span class="step-number">02</span><section><h3>同款碰面，合成下一款</h3><p>相同数字的方块相遇后翻倍：1 + 1 = 2，2 + 2 = 4。每次有效移动会出现一个新的 1 或 2。</p></section></div>
+      <div><span class="step-number">03</span><section><h3>合成 2048，点亮荣耀时刻</h3><p>从 128 开始，每场首次合成一个新数字，都会收到一份小小的鼓励。合成 2048 点亮通关舞台，还能继续挑战更高数字；棋盘填满且无法合并时，这一场结束。</p></section></div>
+    </div>
+    <div class="help-note"><span aria-hidden="true">✦</span><p>想重新想一想？点「撤销」回到上一步。进度和最高纪录会自动保存在当前浏览器。</p></div>
+    <button class="primary-button dialog-primary" type="button" data-close>准备好闪耀了</button>
+  </dialog>
+
+  <dialog id="collection-dialog" class="dialog collection-dialog" aria-labelledby="collection-title">
+    <button class="dialog-close icon-button" type="button" data-close aria-label="关闭造型图鉴">×</button>
+    <span class="eyebrow">I AM GLORIA · THE LOOKBOOK</span><h2 id="collection-title">小紫棋的巡演衣橱 <span aria-hidden="true">✧</span></h2>
+    <p class="dialog-lead">从第一个 1，到你的 2048 荣耀时刻。</p>
+    <div id="collection-grid" class="collection-grid"></div>
+    <p class="collection-dialog-note">相同数字合成下一款。点亮属于你的整座舞台。</p>
+  </dialog>
+
+  <dialog id="restart-dialog" class="dialog restart-dialog" aria-labelledby="restart-title">
+    <button class="dialog-close icon-button" type="button" data-close aria-label="取消重新开始">×</button>
+    <div class="restart-star" aria-hidden="true">✧</div><span class="eyebrow">ONE MORE GLORIA</span><h2 id="restart-title">再开一场？</h2>
+    <p class="dialog-lead">这一场的舞台将重新开始，<br>你的最高纪录会继续保留。</p>
+    <button id="confirm-restart" class="primary-button dialog-primary" type="button">开启新一场</button>
+    <button class="text-button" type="button" data-close>继续这一场</button>
+  </dialog>
+
+  <dialog id="milestone-dialog" class="dialog milestone-dialog" aria-labelledby="milestone-title" aria-describedby="milestone-copy">
+    <button class="dialog-close icon-button" type="button" data-close aria-label="关闭鼓励，继续游戏">×</button>
+    <div class="milestone-art">
+      <span class="milestone-spark milestone-spark-one" aria-hidden="true">✦</span>
+      <img id="milestone-image" src="assets/08-bride.webp" alt="邓紫棋 I AM GLORIA 灰烬婚纱 Q 版造型" width="512" height="512" draggable="false">
+      <span class="milestone-spark milestone-spark-two" aria-hidden="true">✧</span>
+      <span id="milestone-number" class="milestone-number" aria-hidden="true">128</span>
+    </div>
+    <span id="milestone-kicker" class="eyebrow">YOUR FIRST LITTLE GLORY</span>
+    <h2 id="milestone-title">已合成 128！<span aria-hidden="true">✦</span></h2>
+    <p id="milestone-copy" class="milestone-copy">你已经点亮了第一束荣耀。<br>每一次小小的坚持，<br>都在让你更闪耀。</p>
+    <p id="milestone-values" class="milestone-values" hidden></p>
+    <p id="milestone-next" class="milestone-next">小紫棋陪你，继续向 256 出发！</p>
+    <button id="milestone-continue" class="primary-button dialog-primary" type="button" data-close>继续闪耀，向 256 出发</button>
+  </dialog>
+</body>
+</html>
