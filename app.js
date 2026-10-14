@@ -6,9 +6,9 @@
     ['01-encore', '紫色安可'], ['02-jersey', '蓝色球衣'],
     ['03-denim', '丹宁少女'], ['04-rock', '白色摇滚'],
     ['05-camo', '迷彩酷野'], ['06-duchess', '白色女爵'],
-    ['07-glory', '黑金荣耀'], ['08-bride', '灰烬婚纱'],
-    ['06-duchess', '白金返场'], ['07-glory', '荣耀加冕'],
-    ['08-bride', '星光婚纱'], ['08-bride', '终极 GLORIA']
+    ['07-glory', '黑金荣耀'], ['09-tianjin-crystal', '流光闪钻'],
+    ['06-duchess', '白金返场'], ['10-red-regalia', '红焰权杖'],
+    ['11-gilded-phoenix', '涅槃鎏金'], ['08-bride', '终极 GLORIA']
   ];
   const ENCOURAGEMENT = {
     128: ['YOUR FIRST LITTLE GLORY', '你已经点亮了第一束荣耀。\n每一次小小的坚持，都在让你更闪耀。'],
@@ -19,6 +19,10 @@
   };
   const STORAGE = 'gem1248-v1';
   const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const tileLayer = $('tile-layer');
+  const MOVE_MS = 100;
+  const inputQueue = [];
+  let tiles = new Map(), boardGeometry, animationFrame, finishActiveMove, uiTimer;
   let state, best = 0, discovered = 1, previous = null;
   let sound = false, audio, moving = false, pendingMilestone = null, gesture = null, toastTimer;
   const source = level => 'assets/' + ART[Math.min(level, 11)][0] + '.webp';
@@ -62,7 +66,9 @@
     } catch { /* A browser may disable storage. The game still works. */ }
   }
   function save() {
-    try { localStorage.setItem(STORAGE, JSON.stringify({ state, best, discovered, previous, sound })); }
+    // Persist the move immediately, even while the score display waits for the
+    // first animation frame. Reloading or backgrounding never loses a swipe.
+    try { localStorage.setItem(STORAGE, JSON.stringify({ state, best: Math.max(best, state.score), discovered: Math.max(discovered, maximum(state.board)), previous, sound })); }
     catch { /* Storage is optional. */ }
   }
   function snapshot() { return { ...state, board: state.board.slice(), celebratedValues: state.celebratedValues.slice() }; }
@@ -74,13 +80,14 @@
     toastTimer = setTimeout(() => $('toast').classList.remove('visible'), 1900);
   }
   function openDialog(id) {
-    gesture = null;
+    flushInput();
     const dialog = $(id);
     if (!dialog.open) dialog.showModal();
   }
-  function blocked() { return moving || pendingMilestone || !$('overlay').hidden || !!document.querySelector('dialog[open]'); }
+  function flushInput() { inputQueue.length = 0; gesture = null; }
+  function blocked() { return document.hidden || pendingMilestone || !$('overlay').hidden || !!document.querySelector('dialog[open]'); }
   function showPendingMilestone() {
-    if (!pendingMilestone || moving || !$('overlay').hidden || document.querySelector('dialog[open]')) return false;
+    if (!pendingMilestone || moving || document.hidden || !$('overlay').hidden || document.querySelector('dialog[open]')) return false;
     const { values, win } = pendingMilestone;
     const value = values[values.length - 1], next = value * 2, level = levelOf(value);
     const [kicker, copy] = ENCOURAGEMENT[value] || ['BEYOND THE GLORY', '你又突破了自己的小小纪录。\n荣耀没有终点，继续闪耀吧！'];
@@ -103,37 +110,80 @@
     return true;
   }
 
-  function positionTile(tile, index) {
-    const col = index % 4, row = Math.floor(index / 4);
-    tile.style.left = `calc(${col} * ((100% + var(--gap)) / 4))`;
-    tile.style.top = `calc(${row} * ((100% + var(--gap)) / 4))`;
+  function measureBoard(width, height) {
+    // Geometry changes on resize/orientation, never during the swipe loop.
+    const gap = parseFloat(getComputedStyle(tileLayer).getPropertyValue('--gap')) || 0;
+    boardGeometry = { x: (width + gap) / 4, y: (height + gap) / 4 };
+    for (const tile of tiles.values()) positionTile(tile, tile.positionIndex);
   }
-  function renderBoard(spawnIndex = -1, merged = []) {
-    const layer = $('tile-layer');
-    const fragment = document.createDocumentFragment();
+  function positionTile(tile, index) {
+    const x = (index % 4) * boardGeometry.x, y = Math.floor(index / 4) * boardGeometry.y;
+    tile.positionIndex = index;
+    if (tile.positionX !== x || tile.positionY !== y) {
+      tile.style.transform = `translate3d(${x}px, ${y}px, 0)`;
+      tile.positionX = x; tile.positionY = y;
+    }
+  }
+  function updateTile(tile, value, index) {
+    const level = levelOf(value);
+    const valueChanged = tile.dataset.value !== String(value);
+    const indexChanged = tile.dataset.index !== String(index);
+    if (valueChanged) {
+      tile.dataset.level = level;
+      tile.dataset.value = value;
+      tile.firstElementChild.src = source(level);
+      tile.lastElementChild.textContent = value;
+    }
+    if (indexChanged) tile.dataset.index = index;
+    if (valueChanged || indexChanged) tile.setAttribute('aria-label', `${value}，${ART[level][1]}，第 ${Math.floor(index / 4) + 1} 行第 ${index % 4 + 1} 列`);
+    positionTile(tile, index);
+  }
+  function createTile(value, index) {
+    const tile = document.createElement('div');
+    tile.className = 'tile';
+    tile.setAttribute('role', 'gridcell');
+    const img = document.createElement('img');
+    img.alt = ''; img.draggable = false; img.decoding = 'async';
+    img.width = 512; img.height = 512;
+    const number = document.createElement('span');
+    number.className = 'tile-value';
+    tile.append(img, number);
+    updateTile(tile, value, index);
+    return tile;
+  }
+  function resetTileAnimation(tile) {
+    if (tile.className !== 'tile') tile.className = 'tile';
+    if (tile.style.zIndex) tile.style.zIndex = '';
+  }
+  function renderBoard() {
+    const nextTiles = new Map();
     state.board.forEach((value, index) => {
       if (!value) return;
-      const level = levelOf(value);
-      const tile = document.createElement('div');
-      tile.className = 'tile' + (index === spawnIndex ? ' new' : merged.includes(index) ? ' merged' : '');
-      tile.dataset.level = level;
-      tile.dataset.index = index;
-      tile.dataset.value = value;
-      tile.setAttribute('role', 'gridcell');
-      tile.setAttribute('aria-label', `${value}，${ART[level][1]}，第 ${Math.floor(index / 4) + 1} 行第 ${index % 4 + 1} 列`);
-      positionTile(tile, index);
-      const img = document.createElement('img');
-      img.src = source(level);
-      img.alt = '';
-      img.draggable = false;
-      img.decoding = 'async';
-      const number = document.createElement('span');
-      number.className = 'tile-value';
-      number.textContent = value;
-      tile.append(img, number);
-      fragment.append(tile);
+      let tile = tiles.get(index);
+      if (tile) { resetTileAnimation(tile); updateTile(tile, value, index); }
+      else { tile = createTile(value, index); tileLayer.append(tile); }
+      nextTiles.set(index, tile);
     });
-    layer.replaceChildren(fragment);
+    for (const [index, tile] of tiles) if (!nextTiles.has(index)) tile.remove();
+    tiles = nextTiles;
+  }
+  function settleBoard(result, spawned) {
+    const nextTiles = new Map();
+    for (const step of result.moves) {
+      const tile = tiles.get(step.from);
+      resetTileAnimation(tile);
+      if (nextTiles.has(step.to)) { tile.remove(); continue; }
+      updateTile(tile, result.board[step.to], step.to);
+      if (step.merged) tile.classList.add('merged');
+      nextTiles.set(step.to, tile);
+    }
+    if (spawned.index >= 0) {
+      const tile = createTile(spawned.value, spawned.index);
+      tile.classList.add('new');
+      tileLayer.append(tile);
+      nextTiles.set(spawned.index, tile);
+    }
+    tiles = nextTiles;
   }
   function lookCard(level, full) {
     const value = 2 ** level;
@@ -152,8 +202,15 @@
     return card;
   }
   function renderCollection() {
-    $('lookbook').replaceChildren(...ART.slice(0, 8).map((_, i) => lookCard(i, false)));
-    $('collection-grid').replaceChildren(...ART.map((_, i) => lookCard(i, true)));
+    if (!$('lookbook').childElementCount) $('lookbook').append(...ART.slice(0, 8).map((_, i) => lookCard(i, false)));
+    if (!$('collection-grid').childElementCount) $('collection-grid').append(...ART.map((_, i) => lookCard(i, true)));
+    for (const card of document.querySelectorAll('.look-card')) {
+      const level = Number(card.dataset.level), unlocked = 2 ** level <= discovered;
+      if (card.classList.contains('unlocked') === unlocked) continue;
+      card.classList.toggle('unlocked', unlocked); card.classList.toggle('locked', !unlocked);
+      card.setAttribute('aria-label', `${2 ** level} ${ART[level][1]}${unlocked ? '，已解锁' : '，尚未解锁'}`);
+      card.querySelector('.look-status').textContent = unlocked ? '✦' : '·';
+    }
     const count = $('collection-count');
     if (count) count.textContent = `${Math.min(12, Math.floor(Math.log2(discovered)) + 1)} / 12`;
   }
@@ -167,9 +224,15 @@
     $('moves').textContent = state.moves;
     $('highest').textContent = top;
     $('progress-fill').style.width = Math.min(100, Math.log2(top) / 11 * 100) + '%';
-    $('current-look').src = source(levelOf(top));
-    $('current-look').alt = ART[levelOf(top)][1] + ' Q 版造型';
-    $('current-look-name').textContent = ART[levelOf(top)][1];
+    const currentSource = source(levelOf(top));
+    if ($('current-look').getAttribute('src') !== currentSource) {
+      $('current-look').src = currentSource;
+    }
+    const currentName = ART[levelOf(top)][1];
+    if ($('current-look-name').textContent !== currentName) {
+      $('current-look').alt = currentName + ' Q 版造型';
+      $('current-look-name').textContent = currentName;
+    }
     $('undo-btn').disabled = !previous || moving;
     $('sound-btn').setAttribute('aria-pressed', String(sound));
     $('sound-btn').setAttribute('aria-label', sound ? '关闭音效' : '开启音效');
@@ -195,6 +258,7 @@
     } catch { /* Sound cannot prevent a move. */ }
   }
   function overlay(kind) {
+    flushInput();
     const win = kind === 'win';
     $('overlay').dataset.kind = kind;
     $('overlay-title').textContent = win ? '你的 GLORIA 时刻 ✦' : '这一场，也很闪耀';
@@ -214,6 +278,12 @@
   }
   function move(direction) {
     if (blocked()) return;
+    if (moving) {
+      // Two intentional quick swipes can wait for the current transition. A
+      // bounded queue stays responsive without a long chain of automatic moves.
+      if (inputQueue.length < 2) inputQueue.push(direction);
+      return;
+    }
     const result = E.move(state.board, direction);
     if (!result.changed) return;
     previous = snapshot();
@@ -227,25 +297,46 @@
     };
     pendingMilestone = newValues.length ? { values: newValues, win: firstWin } : null;
     moving = true;
-    updateUI(); save();
-    if (!reduced) {
-      result.moves.forEach(step => {
-        const tile = $('tile-layer').querySelector(`[data-index="${step.from}"]`);
-        if (tile) { positionTile(tile, step.to); if (step.merged) tile.style.zIndex = '3'; }
-      });
-    }
-    playTone(result.score ? maximum(result.board) : 1, result.score > 0);
-    setTimeout(() => {
-      renderBoard(spawned.index, result.merged);
+    $('undo-btn').disabled = true;
+    save();
+    const finish = () => {
+      cancelAnimationFrame(animationFrame);
+      clearTimeout(uiTimer);
+      finishActiveMove = null;
+      settleBoard(result, spawned);
       moving = false; updateUI();
       if (result.score > 0) announce(`合成得分加${result.score}，当前得分${state.score}，最大方块${maximum(state.board)}。`);
       // Finish the encouragement before presenting a win or a full-board ending.
       // A help/lookbook dialog opened during animation takes priority until closed.
-      if (pendingMilestone) { showPendingMilestone(); return; }
+      if (document.hidden) { flushInput(); return; }
+      if (pendingMilestone) { flushInput(); showPendingMilestone(); return; }
       checkEnd();
-    }, reduced ? 0 : 125);
+      while (inputQueue.length && !moving && !blocked()) move(inputQueue.shift());
+    };
+    finishActiveMove = finish;
+    if (reduced) { playTone(result.score ? maximum(result.board) : 1, result.score > 0); finish(); return; }
+    for (const step of result.moves) {
+      const tile = tiles.get(step.from);
+      resetTileAnimation(tile);
+      if (step.from !== step.to) tile.classList.add('sliding');
+      if (step.merged) tile.style.zIndex = '3';
+    }
+    animationFrame = requestAnimationFrame(start => {
+      for (const step of result.moves) positionTile(tiles.get(step.from), step.to);
+      // Submit transforms before changing the surrounding score/lookbook UI.
+      uiTimer = setTimeout(() => {
+        updateUI();
+        playTone(result.score ? maximum(result.board) : 1, result.score > 0);
+      }, 0);
+      const tick = time => {
+        if (time - start >= MOVE_MS + 12) finish();
+        else animationFrame = requestAnimationFrame(tick);
+      };
+      animationFrame = requestAnimationFrame(tick);
+    });
   }
   function undo() {
+    flushInput();
     if (!previous || moving || pendingMilestone || document.querySelector('dialog[open]')) return;
     const celebratedValues = uniqueMilestones([...state.celebratedValues, ...previous.celebratedValues]);
     const won = state.won || previous.won;
@@ -256,8 +347,8 @@
     toast('已撤回一步'); announce('已撤回一步，当前得分' + state.score);
   }
   function newGame() {
+    flushInput();
     if (moving) return;
-    gesture = null;
     pendingMilestone = null;
     state = { board: E.startBoard(), score: 0, moves: 0, won: false, celebratedValues: [] };
     previous = null; $('overlay').hidden = true;
@@ -269,12 +360,29 @@
   load();
   if (!state) state = { board: E.startBoard(), score: 0, moves: 0, won: false, celebratedValues: [] };
   discovered = Math.max(discovered, maximum(state.board));
+  const initialRect = tileLayer.getBoundingClientRect();
+  measureBoard(initialRect.width, initialRect.height);
+  if (typeof ResizeObserver === 'function') {
+    new ResizeObserver(entries => {
+      const { width, height } = entries[0].contentRect;
+      measureBoard(width, height);
+    }).observe(tileLayer);
+  } else window.addEventListener('resize', () => {
+    const { width, height } = tileLayer.getBoundingClientRect();
+    measureBoard(width, height);
+  }, { passive: true });
   renderCollection(); renderBoard(); updateUI(); save();
   checkEnd();
-  // Decode the eight distinct assets in the background; controls never wait on images.
-  ART.slice(0, 8).forEach((_, i) => { const image = new Image(); image.src = source(i); });
+  // Warm every distinct costume (including late-game tiers) once. Predecoded
+  // assets are reused by surviving tiles instead of replacing all their images.
+  const preloadImages = [...new Set(ART.map((_, i) => source(i)))].map(src => {
+    const image = new Image(); image.decoding = 'async'; image.src = src;
+    if (image.decode) image.decode().catch(() => {});
+    return image;
+  });
 
   $('new-game-btn').addEventListener('click', () => {
+    flushInput();
     if (moving) return;
     if (state.moves > 0) openDialog('restart-dialog'); else newGame();
   });
@@ -293,7 +401,7 @@
       if (event.clientX < r.left || event.clientX > r.right || event.clientY < r.top || event.clientY > r.bottom) dialog.close();
     } });
     dialog.addEventListener('close', () => {
-      gesture = null;
+      flushInput();
       // Closing a restart confirmation can immediately start a new game. Wait
       // for its click handler to reset the pending milestone before reopening.
       setTimeout(() => {
@@ -320,6 +428,9 @@
     event.preventDefault(); move(direction);
   });
   $('board').addEventListener('pointerdown', event => {
+    // A second finger cancels the active gesture, so a pinch or stray touch
+    // cannot accidentally turn into a game move when the first finger lifts.
+    if (gesture || event.isPrimary === false) { gesture = null; return; }
     if (blocked() || (event.pointerType === 'mouse' && event.button !== 0)) return;
     gesture = { id: event.pointerId, x: event.clientX, y: event.clientY };
     $('board').setPointerCapture(event.pointerId);
@@ -333,6 +444,11 @@
     move(Math.abs(dx) > Math.abs(dy) ? dx > 0 ? 'right' : 'left' : dy > 0 ? 'down' : 'up');
   });
   ['pointercancel', 'lostpointercapture'].forEach(type => $('board').addEventListener(type, () => { gesture = null; }));
-  document.addEventListener('visibilitychange', () => { if (document.hidden) { gesture = null; save(); } });
+  document.addEventListener('visibilitychange', () => {
+    flushInput();
+    if (document.hidden) { if (finishActiveMove) finishActiveMove(); save(); }
+    else if (pendingMilestone) showPendingMilestone();
+    else if (!document.querySelector('dialog[open]') && $('overlay').hidden) checkEnd();
+  });
   document.querySelectorAll('[data-direction]').forEach(button => button.addEventListener('click', () => move(button.dataset.direction)));
 })();
