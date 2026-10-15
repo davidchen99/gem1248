@@ -174,12 +174,10 @@
       resetTileAnimation(tile);
       if (nextTiles.has(step.to)) { tile.remove(); continue; }
       updateTile(tile, result.board[step.to], step.to);
-      if (step.merged) tile.classList.add('merged');
       nextTiles.set(step.to, tile);
     }
     if (spawned.index >= 0) {
       const tile = createTile(spawned.value, spawned.index);
-      tile.classList.add('new');
       tileLayer.append(tile);
       nextTiles.set(spawned.index, tile);
     }
